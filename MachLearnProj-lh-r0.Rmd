@@ -1,0 +1,107 @@
+---
+title: "8-MachLearnProj"
+author: "L. Humphries"
+date: "Friday, February 20, 2015"
+output: html_document
+---
+
+###Background (quoted from the assignment)
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+###Data (provided in assignment)
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+### Initialization and Load Data
+```{r, cache = TRUE, message = FALSE}
+library(caret)
+library(randomForest)
+library(rattle) # thanks forum for the suggestion to use this library 
+
+set.seed(1234) # set seed for reproducibility
+
+train <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings = c("NA",""), header = TRUE) 
+test <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings = c("NA",""), header = TRUE)
+```
+
+After checking the structure of the data (both training and testing), it was determined tha that the data needed to be cleaned.  The results of the strructure can be see as the first elements of the APPENDIX
+
+###Data Cleaning
+The "rattle" library was used to look at the data and build the list below of varibles to delete.
+```{rcache = TRUE, message = FALSE}
+# Remove varibles without values
+clean <- names(train) %in% c("new_window", "kurtosis_roll_belt", "kurtosis_picth_belt", "kurtosis_yaw_belt", "skewness_roll_belt", "skewness_roll_belt.1", "skewness_yaw_belt", "max_yaw_belt", "min_yaw_belt", "amplitude_yaw_belt", "avg_roll_arm", "stddev_roll_arm", "var_roll_arm", "avg_pitch_arm", "stddev_pitch_arm", "var_pitch_arm", "avg_yaw_arm", "stddev_yaw_arm", "var_yaw_arm", "kurtosis_roll_arm", "kurtosis_picth_arm", "kurtosis_yaw_arm", "skewness_roll_arm", "skewness_pitch_arm", "skewness_yaw_arm", "max_roll_arm", "min_roll_arm", "min_pitch_arm", "amplitude_roll_arm", "amplitude_pitch_arm", "kurtosis_roll_dumbbell", "kurtosis_picth_dumbbell", "kurtosis_yaw_dumbbell", "skewness_roll_dumbbell","skewness_pitch_dumbbell", "skewness_yaw_dumbbell", "max_yaw_dumbbell", "min_yaw_dumbbell", "amplitude_yaw_dumbbell", "kurtosis_roll_forearm", "kurtosis_picth_forearm", "kurtosis_yaw_forearm", "skewness_roll_forearm", "skewness_pitch_forearm", "skewness_yaw_forearm", "max_roll_forearm", "max_yaw_forearm", "min_roll_forearm", "min_yaw_forearm", "amplitude_roll_forearm", "amplitude_yaw_forearm", "avg_roll_forearm", "stddev_roll_forearm", "var_roll_forearm", "avg_pitch_forearm", "stddev_pitch_forearm", "var_pitch_forearm", "avg_yaw_forearm", "stddev_yaw_forearm", "var_yaw_forearm")
+
+train1 <- train[!clean]
+test1 <- test[!clean]
+
+summary(train1)
+```
+
+Looking at the summary information, there is a large number of varibles with NA (19261 count).  These should be cleaned from the data (both training and testing) so as to minimze impact of NA's on the analysis. 
+
+```{rcache = TRUE, message = FALSE}
+idxNA <- !sapply(train1, function(x) any(is.na(x)))
+train2 <- train1[,idxNA]
+test2 <- test1[,idxNA] 
+
+dim(train); dim(train1); dim(train2)
+dim(test); dim(test1); dim(test2)
+```
+
+Partition current training set into train and cross-validation sets (using 60/40 principle).  Due to computer runtime partition reduced to 30%.  MOdeling did not work as well with hte smaller train set.
+```{rcache = TRUE, message = FALSE}
+idxPart <- createDataPartition(train2$classe, p=0.3, list = FALSE, times = 1)
+train3 <- train2[idxPart, ]
+trainCV3 <- train2[-idxPart, ]
+
+dim(train3); dim(trainCV3)
+```
+
+###Machine Learning
+Train 
+```{rcache = TRUE, message = FALSE}
+# train using random forest
+fitRF <- train(classe ~ ., data = train3, method = "rf", importance = TRUE)
+predRF<- predict(fitRF, train3)
+
+# train using SVM Radial
+fitSR <- train(classe ~ ., data = train3, method = "svmRadial")
+predSR<- predict(fitSR, train3)
+
+# train using Lasso
+fitRP <- train(classe ~ ., data = train3, method = "rpart")
+predRP<- predict(fitRP, train3)
+```
+
+###Sample Error and Cross Validation
+
+```{rcache = TRUE, message = FALSE}
+cmRF <- confusionMatrix(predRF, train3$classe)
+cmSR <- confusionMatrix(predSR, train3$classe)
+cmRP <- confusionMatrix(predRP, train3$classe)
+```
+
+Use RF as most accurate
+
+
+#APPENDIX:
+Summary of downloaded Training data:
+```{r, cache = TRUE, message = FALSE}
+str(train)
+```
+
+```{r, cache = TRUE, message = FALSE}
+str(test)
+```
+
+```{r}
+fancyRpartPlot(fitRF)
+```
